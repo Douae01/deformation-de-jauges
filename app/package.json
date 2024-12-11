@@ -1,0 +1,65 @@
+{
+  "name": "my-electron-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./public/electron.js",
+  "dependencies": {
+    "@serialport/parser-readline": "^12.0.0",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "chart.js": "^4.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "http": "^0.0.1-security",
+    "lucide-react": "^0.379.0",
+    "react": "^18.3.1",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.3.1",
+    "react-scripts": "5.0.1",
+    "serialport": "^12.0.0",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
+    "three": "^0.171.0",
+    "web-vitals": "^2.1.4"
+  },
+  "devDependencies": {
+    "concurrently": "^7.0.0",
+    "electron": "^13.1.7",
+    "electron-builder": "^22.11.7",
+    "electron-is-dev": "^2.0.0",
+    "tailwindcss": "^3.4.3",
+    "wait-on": "^6.0.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "start-server": "node ./server/server.js",
+    "electron-dev": "concurrently \"BROWSER=none npm start\" \"wait-on http://localhost:3000 && electron .\" \"npm run start-server\"",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.example.my-electron-app",
+    "files": [
+      "build/**/*",
+      "./public/electron.js"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    }
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

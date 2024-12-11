@@ -1,0 +1,28 @@
+[
+  {
+    "target": "home",
+    "positionActuelle": "work",
+    "actions": [
+      {
+        "action": "u",
+        "speed": 100,
+        "duration": 5
+      },
+      {
+        "action": "l",
+        "speed": 100,
+        "duration": 3350
+      },
+      {
+        "action": "u",
+        "speed": 100,
+        "duration": 3122
+      },
+      {
+        "action": "s",
+        "speed": 0,
+        "duration": 4320
+      }
+    ]
+  }
+]
