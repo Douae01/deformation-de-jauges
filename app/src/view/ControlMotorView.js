@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
 import socket from "../models/socketInit";
 import LineChart from "../components/LineChart";
+import Balance from "../assets/balance.png"
 
 const ControlMotorView = () => {
     const [realTimeData, setRealTimeData] = useState([]);
     const [currentAngle, setCurrentAngle] = useState(0);
     const [hasConnection, setHasConnection] = useState(true);
     const [mode, setMode] = useState("manual"); // "manual" or "automatic"
-    const [masse, setMasse] = useState(null);
-    const [deformation, setDeformation] = useState(null);
-    const [force, setForce] = useState(null);
-    const [distance, setDistance] = useState(null);
+    const [masse, setMasse] = useState(0);
+    const [deformation, setDeformation] = useState(0);
+    const [force, setForce] = useState(0);
+    const [distance, setDistance] = useState(0);
     const canvasRef = useRef(null);
     const deformationCanvasRef = useRef(null);
     
@@ -27,19 +28,20 @@ const ControlMotorView = () => {
                 }
                 else if (data.startsWith("D:")) {
                     const deformationValueString = data.substring(2);
-                    deformation = parseFloat(deformationValueString);
-                    console.log("Deformation extraite :", deformation);
-                    setDeformation(deformation);
+                    const deformationValue = parseFloat(deformationValueString);
+                    console.log("Deformation extraite :", deformationValue);
+                    setDeformation(deformationValue);
                 }
                 else if (data.startsWith("M:")) {
                     const masseValueString = data.substring(2);
-                    masse = parseInt(masseValueString, 10);
+                    const masseValue = parseFloat(masseValueString);
+                    const masse= masseValue;
                     console.log("Masse extraite :", masse);
                     setMasse(masse);
                 }
                 else if (data.startsWith("F:")) {
                     const forceValueString = data.substring(2);
-                    force = parseFloat(forceValueString);
+                    const force = parseFloat(forceValueString);
                     console.log("Effort extrait :", force);
                     setForce(force);
                 }
@@ -161,7 +163,7 @@ const ControlMotorView = () => {
             const startX = 50; // Fixed end of the beam (left side)
             const startY = canvas.height / 2; // Middle of the canvas height
             const endX = canvas.width - 50; // Free end of the beam (right side)
-            const deformationEffect = deformation ? deformation * 10 : 0; // Vertical deformation
+            const deformationEffect = deformation ? deformation * 1000 : 0; // Vertical deformation
     
             const beamThickness = 20; // Thickness of the beam for 3D effect
     
@@ -222,7 +224,7 @@ const ControlMotorView = () => {
                 {/* Contrôles en haut */}
                 <div className="w-full max-w-5xl border-b-2 border-gray-300 p-5 flex flex-col items-center bg-white shadow-md">
                     <div id="currentAngle" className="text-xl font-semibold mb-2 uppercase text-shadow-10">
-                        Current Angle: {currentAngle}
+                        Angle Courant: {currentAngle}
                     </div>
 
                     <div className="mb-1">
@@ -273,23 +275,34 @@ const ControlMotorView = () => {
             </div>
 
             {/* Section en bas à gauche */}
-            <div className="border border-gray-300 p-5 flex mt-2">
-                <div>
-                    <p className="text-xl font-semibold mb-1">Informations nécessaires</p>
-                    <div className="text-center text-lg">
-                        <p>Masse: {masse !== null ? masse : "Non disponible"}</p>
-                        <p className="ml-12">Déformation: {deformation !== null ? deformation : "Non disponible"}</p>
-                        <p>Force: {force !== null ? force : "Non disponible"}</p>
-                        <p className="ml-6">Distance: {distance !== null ? distance : "Non disponible"}</p>
+            <div className="border border-gray-300 p-5 flex-col mt-2 h-80">
+                <p className="text-xl font-semibold mb-1  m-auto">Informations nécessaires</p>
+                <div className="border border-gray-300 p-5 flex flex-col items-center mt-2">
+                    {/* Ajouter l'image de balance */}
+                    <img src={Balance} alt="Balance" className="w-16 h-16 mb-4" />
+
+                    {/* Informations nécessaires */}
+                    <div className="text-center">
+                        <div className="text-lg">
+                            {/* Masse et Force */}
+                            <p>Masse: {masse !== null ? masse : "Non disponible"}</p>
+                            <p>Force: {force !== null ? force : "Non disponible"}</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* Section en bas à droite */}
-            <div className="border border-gray-300 p-5 flex mt-2 ml-2">
-                <div>
-                    <p className="text-xl font-semibold mb-5">Représentation de la lame</p>
+            <div className="border border-gray-300 p-5 flex mt-2 ml-2 h-80">
+                <div className="m-auto">
+                    <p className="text-xl font-semibold mb-5 items-center">Représentation de la lame</p>
                     <canvas ref={deformationCanvasRef} width="400" height="200" className="border border-gray-300 shadow-lg"></canvas>
+                    <div className="text-center">
+                        <div className="text-lg">
+                            {/* Déformation */}
+                            <p>Déformation: {deformation !== null ? deformation : "Non disponible"}</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

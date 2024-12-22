@@ -61,17 +61,16 @@ typedef volatile struct Buffer {
 #define NUM_VALUES 20 			// Nombre de valeurs utilisées pour le moyennage
 #define GF 2.1  				//Gauge Factor
 #define V_ref 5  				//Tension de référence 5V
-#define E 69e9					//module de Young de la lame en aluminium
-#define L 300e-3				// longueur de la poutre en m
-#define B 30e-3           		// largeur de la poutre en m
-#define H 2e-3                 	// epaisseur de la poutre en m
-#define I ((B * H * H * H) / 12) // moment quadratique de la poutre en m^4
+#define E 69000000000			//module de Young de la lame en aluminium
+#define L 0.3				// longueur de la poutre en m
+#define B 0.03           		// largeur de la poutre en m
+#define H 0.002                 // epaisseur de la poutre en m
+#define I 0.00000000002			// moment quadratique de la poutre en m^4 (B*H^3)/12
 #define OFFSET 0.012
 #define G 9.81                	//pesanteur en m/s^2
-#define Y 7e-3                 	// Position de la jauge en m
-#define Z 1.1e-3 				// Distance entre l'axe neutre et la jauge en m
-
-uint16_t VmValues[NUM_VALUES] = {0}; // Initialisation des valeurs à 0
+#define Y 0.007               	// Position de la jauge en m
+#define Z 0.011 				// Distance entre l'axe neutre et la jauge en m
+uint16_t VmValues[NUM_VALUES]; // Initialisation des valeurs à 0
 uint8_t VmIndex = 0; // Indice pour ajouter les nouvelles valeurs dans le tableau
 uint16_t Vm;
 /* USER CODE END PD */
@@ -96,7 +95,7 @@ UART_HandleTypeDef huart2;
 char txBufSend[txBufSendLEN];    //envoi des données
 char txBufReceive[txBufReceiveLEN];    //reception des données
 volatile uint32_t adcResultsDMA[ADC_SIZE];    //récupération des valeur du DMA
-int mode=0, servoMode=0, servoPos=0;
+int mode=1, servoMode=0, servoPos=0;
 
 
 char commande[3][33];			//3 listes de 19 char
@@ -124,9 +123,12 @@ void term_printf_stlink(const char* fmt, ...);
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 float servo_writeAngle(int angle);
 void computeData(const char* data);
-float calculateMovingAverage(uint16_t* values, uint8_t size);
 int forceToAngle(float force);
+float calculateMasse(float v);
 /* USER CODE END PFP */
+#define per_deg 5.55  // pulse for 1° Rotation
+uint16_t Vm;
+char msg[555];
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
@@ -167,94 +169,100 @@ int main(void)
   //MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_Base_Start_IT(&htim2);
   /* USER CODE END 2 */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  float duty;
-  float voltage = 0.0;
-  float VmAvg;
-  int masse;
+  float voltage;
+  float masse;
   float deformation;
   float force;
 
   while (1) {
-	  HAL_ADC_Start(&hadc1);
+      HAL_ADC_Start(&hadc1);
+      //Attends la fin de la conversion pour Vm
+      HAL_ADC_PollForConversion(&hadc1, 100);
+      // Lit la valeur brute de l'ADC (12 bits)
+      Vm = HAL_ADC_GetValue(&hadc1);
+      // Conversion de la valeur brute d'ADC en tension
+      voltage = ((float)Vm * 3.3 / 4095.0);
+      // Arrête l'ADC pour Vm
+      HAL_ADC_Stop(&hadc1);
 
-	  //Attends la fin de la conversion pour Vm
-	  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-
-	  // Lit la valeur convertie pour Vm
-	  Vm = HAL_ADC_GetValue(&hadc1);
-
-	  // Arrête l'ADC pour Vm
-	  HAL_ADC_Stop(&hadc1);
-      // Mise à jour du tableau de moyennage
-      VmValues[VmIndex] = Vm;
-      VmIndex = (VmIndex + 1) % NUM_VALUES; // Boucler l'indice
-
-      // Calcul de la moyenne
-      VmAvg = calculateMovingAverage(VmValues, NUM_VALUES); //eviter tensions bruites a cause de l'ADC
-
-      // Conversion de la moyenne en tension
-      voltage = ((float)VmAvg * V_ref / 4095.0); //3.3? multiplier par 50pour augmenter gain et donc avoir des valeurs jusqu'a 3.3V
-
-      // Calculer la déformation
-      deformation = (int)(voltage-OFFSET) / (GF * V_ref);
+      // Affichage de la tension sur l'IHM
+      sprintf(msg,"V:%f\r\n",voltage);
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
 
       // Calculer la masse
-      masse = (deformation * E * I) / (G * Z * (L - Y)); //en grammes
+      masse = calculateMasse(voltage); // en g
+	  // Affichage de la masse sur l'IHM
+      sprintf(msg,"M:%f\r\n",masse);
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+
+      // Calculer la déformation
+      deformation = (masse*0.001*G*L)/ (2*E*I);
+	  // Affichage de la déformation sur l'IHM
+      sprintf(msg,"D:%f\r\n",deformation);
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
 
       //Calcul de la force
-      force = masse*1e-3*G; //convertir masse en kg puis multiplier par g pour trouver effort appliqué sur la lame
-
-	  // Affichage du voltage sur l'IHM
-	  term_printf_stlink("V:%f\r\n", voltage);
-
-	  // Affichage de la déformation sur l'IHM
-	  term_printf_stlink("D:%f\r\n", deformation);
-
-	  // Affichage de la masse sur l'IHM
-	  term_printf_stlink("M:%f\r\n", masse);
-
+      force = masse*0.001*G;
 	  // Affichage de l'effort sur l'IHM
-	  term_printf_stlink("F:%f\r\n", force);
+      sprintf(msg,"F:%f\r\n",force);
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
 
-	  HAL_Delay(1000);
 
-	  if (mode == 1) {  // Mode manuel
-		  float duty = servo_writeAngle(servoPos);  // Calcul du duty cycle
-	      htim2.Instance->CCR1 = duty;  // Appliquer le duty cycle
-	  }
-	  else if (mode == 2) {  // Mode automatique
-          // Calculer l'angle du servomoteur en fonction de la force
-          int angleAuto = forceToAngle(force);
+      HAL_Delay(1000);
 
-          // Calculer le duty cycle en fonction de l'angle
-          float duty = servo_writeAngle(angleAuto);
-          htim2.Instance->CCR1 = duty;  // Appliquer le duty cycle
+	    if (mode == 1) {  // Mode manuel
+	        float duty = servo_writeAngle(servoPos);  // Calcul du duty cycle
+	        htim2.Instance->CCR1 = duty;  // Appliquer le duty cycle
 
-          // Envoyer l'angle actuel via UART pour la synchronisation avec le frontend
-          term_printf_stlink("%d\r\n", angleAuto);
-	  }
+	        // Envoyer l'angle actuel via UART pour synchronisation avec le frontend
+	        //term_printf_stlink("Mode: 1, Angle: %d \r\n", servoPos);
+
+	    }
+	    else if (mode == 2) {  // Mode automatique
+	          // Calculer l'angle du servomoteur en fonction de la force
+	          int angleAuto = forceToAngle(force);
+
+	          // Calculer le duty cycle en fonction de l'angle
+	          float duty = servo_writeAngle(angleAuto);
+	          htim2.Instance->CCR1 = duty;  // Appliquer le duty cycle
+
+	          // Envoyer l'angle actuel via UART pour la synchronisation avec le frontend
+	          term_printf_stlink("%d\r\n", angleAuto);
+	    }
+  }
+}
+float calculateMasse(float v){
+	float masse;
+	if(v>=0.61){
+		masse=0;
+	}
+	else if(v>=0.60 && v<0.61){
+		masse=5;
+	}
+	else if(v>=0.59 && v<0.60){
+		masse=10;
+	}
+	else if(v>=0.586 && v<0.59){
+		masse=20;
+	}
+	else if(v>=0.55 && v<0.585){
+		masse=50;
+	}
+	else if(v>=0.44 && v<=0.48){
+		masse=100;
+	}
+	else if(v<0.48){
+		masse=100;
+	}
+	return masse;
+
 }
 
-float servo_writeAngle(int angle) {
-	if (angle < ANGLE_MIN) angle = ANGLE_MIN;
-	if (angle > ANGLE_MAX) angle = ANGLE_MAX;
-	float duty = CCR_MIN + (((float)(angle - ANGLE_MIN) / (ANGLE_MAX - ANGLE_MIN)) * (CCR_MAX - CCR_MIN));
-	return duty;
-}
-
-// Fonction pour calculer la moyenne glissante
-float calculateMovingAverage(uint16_t* values, uint8_t size) {
-    uint32_t sum = 0;
-    for (uint8_t i = 0; i < size; i++) {
-        sum += values[i];
-    }
-    return (float)sum / size;
-}
-
-int forceToAngle(float force) {
+int forceToAngle(float force){
     float forceMin = 0.0;
     float forceMax = 0.981;  // Force maximale en N (avec une masse de 100 g)
     float angleMin = ANGLE_MIN;  // Angle minimal du servomoteur
@@ -269,11 +277,19 @@ int forceToAngle(float force) {
     return (int)angle;  // Retourne l'angle calculé
 }
 
+
+float servo_writeAngle(int angle) {
+    if (angle < ANGLE_MIN) angle = ANGLE_MIN;
+    if (angle > ANGLE_MAX) angle = ANGLE_MAX;
+    float duty = CCR_MIN + (((float)(angle - ANGLE_MIN) / (ANGLE_MAX - ANGLE_MIN)) * (CCR_MAX - CCR_MIN));
+    return duty;
+}
+
 void computeData(const char* data) {
-	char *token = strtok(data, ",");  // Découpage de la commande reçue
+    char *token = strtok(data, ",");  // Découpage de la commande reçue
     int i = 0;
     while (token) {
-    	strcpy(commande[i], token);
+        strcpy(commande[i], token);
         i++;
         token = strtok(NULL, ",");
     }
@@ -281,13 +297,15 @@ void computeData(const char* data) {
     mode = atoi(commande[0]);  // Premier paramètre : mode
 
     if (i > 1) {  // Deuxième paramètre : angle manuel
-    	int angle = atoi(commande[1]);
-    	if (angle >= ANGLE_MIN && angle <= ANGLE_MAX) {
-    		servoPos = angle;
+        int angle = atoi(commande[1]);
+        if (angle >= ANGLE_MIN && angle <= ANGLE_MAX) {
+            servoPos = angle;
         }
     }
-}
 
+    // Optionnel : Envoyer un accusé de réception
+    //term_printf_stlink("Mode: %d, Angle: %d \r\n", mode, servoPos);
+}
 
 /**
   * @brief System Clock Configuration
@@ -369,7 +387,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
   */
-  sConfig.Channel = ADC_CHANNEL_14;
+  sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = 1;
   sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -381,41 +399,6 @@ static void MX_ADC1_Init(void)
   /* USER CODE END ADC1_Init 2 */
 
 }
-
-//static void MX_TIM1_Init(void){
-//  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-//  TIM_MasterConfigTypeDef sMasterConfig = {0};
-//
-//  htim1.Instance = TIM1;
-//  htim1.Init.Prescaler = 15999;                       // Diviseur de fréquence
-//  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;        // Compte vers le haut
-//  htim1.Init.Period = 420;                            // Période de débordement
-//  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;  // Division d'horloge
-//  htim1.Init.RepetitionCounter = 0;
-//  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-//  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-//  {
-//    Error_Handler(); // Gestion des erreurs
-//  }
-//
-//  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL; // Source d'horloge interne
-//  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-//  {
-//    Error_Handler();
-//  }
-//
-//  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET; // Pas de déclencheur
-//  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE; // Pas de mode maître-esclave
-//  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-//  {
-//    Error_Handler();
-//  }
-//
-//  HAL_NVIC_SetPriority(25, 0, 0); // Priorité 0, valeur directe pour TIM1_UP_IRQn
-//  HAL_NVIC_EnableIRQ(25);        // Activer l'interruption
-//
-//}
-
 
 /**
   * @brief TIM2 Initialization Function
@@ -659,21 +642,42 @@ void term_printf_stlink(const char* fmt, ...)
 					put_string_stlink(s);
 					break;
 				case 'f':
-					if(first==0){ ull = va_arg(ap, long long unsigned int); first = 1;}
-					ull = va_arg(ap, long long unsigned int);
-					int sign = ( ull & 0x80000000 ) >> 31;
-					int m = (ull & 0x000FFFFF) ; // should be 0x007FFFFF
-					float mf = (float)m ;
-					mf = mf / pow(2.0,20.0);
-					mf = mf + 1.0;
-					int e = ( ull & 0x78000000 ) >> 23 ; // should be int e = ( ul & 0x7F800000 ) >> 23;
-					e = e | (( ull & 0x000F00000 ) >> 20);
-					e = e - 127;
-					float f = mf*myPow(2.0,e);
-					if(sign==1){ put_char('-'); }
-					float2str((char*)s, f, 5);
-					put_string_stlink((char*)s);
-					break;
+				    // Récupérer l'argument au format IEEE 754 (32 bits)
+				    unsigned long ull = va_arg(ap, unsigned long);
+
+				    // Extraire le signe, l'exposant, et la mantisse
+				    int sign = (ull & 0x80000000) >> 31; // Bit de signe
+				    int e = (ull & 0x7F800000) >> 23;    // Exposant (biaisé de 127)
+				    int m = (ull & 0x007FFFFF);          // Mantisse
+
+				    // Normaliser la mantisse
+				    float mf = (float)m / 8388608.0; // Division par 2^23
+				    mf += 1.0; // Ajout de 1 pour la normalisation
+
+				    // Calcul de la valeur finale
+				    e -= 127; // Suppression du biais de l'exposant
+				    // Calcul de la puissance de 2 manuellement
+				    float factor = 1.0;
+				    if (e > 0) {
+				        for (int i = 0; i < e; i++) {
+				            factor *= 2.0; // Multiplication par 2 pour e > 0
+				        }
+				    } else if (e < 0) {
+				        for (int i = 0; i < -e; i++) {
+				            factor /= 2.0; // Division par 2 pour e < 0
+				        }
+				    }
+
+				    // Calcul de la valeur réelle
+				    float f = mf * factor; // Mantisse * 2^e
+				    if (sign == 1) f = -f; // Ajout du signe
+
+				    // Conversion en chaîne avec précision de 5 chiffres après la virgule
+				    float2str((char *)s, f, 5);
+
+				    // Afficher la chaîne résultante
+				    put_string_stlink((char *)s);
+				    break;
 				default:
 					putchar_stlink(*fmt);
 			}

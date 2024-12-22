@@ -12,7 +12,7 @@ const LineChart = ({ data, label, unit, color }) => {
         chartInstance.current.data.datasets[0].data = data;
         chartInstance.current.options.scales.y.title.text = `${label} (${unit})`;
         chartInstance.current.options.scales.y.min = 0;
-        chartInstance.current.options.scales.y.max = unit === "V" ? 100 : 5000;
+        chartInstance.current.options.scales.y.max = unit === "V" ? 5 : 5000;
         chartInstance.current.update();
       } else {
         const ctx = chartRef.current.getContext("2d");

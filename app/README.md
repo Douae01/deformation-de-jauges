@@ -6,6 +6,10 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 
 In the project directory, you can run:
 
+### `npm install`
+
+Installs the necessary dependencies for the project. Run this command before using any of the scripts below.
+
 ### `npm start`
 
 Runs the app in the development mode.\
@@ -28,6 +32,11 @@ The build is minified and the filenames include the hashes.\
 Your app is ready to be deployed!
 
 See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+
+### `npm run electron-dev`
+
+Runs the app in Electron development mode.\
+This is useful for testing and debugging the Electron environment of the app.
 
 ### `npm run eject`
 
